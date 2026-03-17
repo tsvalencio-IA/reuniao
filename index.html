@@ -15,10 +15,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
 
-    <!-- TENSORFLOW & MOVENET (Para a Magia AR / Minority Report) -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <!-- TENSORFLOW & MOVENET (Pacote consolidado para evitar falhas de carregamento) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
     <style>
@@ -233,7 +231,7 @@
 
     <div id="app-container">
         <div class="progress-bar" id="progress-bar"></div>
-        <div id="firebase-warning" class="status-warning fade-out"><i class="fa-solid fa-cloud-check"></i> Conectado (Nuvem Ativa)</div>
+        <div id="firebase-warning" class="status-warning fade-out"><i class="fa-solid fa-cloud-check"></i> Firebase BD Sincronizado</div>
         <div id="ar-status-warning" class="status-warning pulse"><i class="fa-solid fa-camera"></i> A Carregar IA Holográfica...</div>
 
         <!-- CÂMERA ESCONDIDA -->
@@ -289,8 +287,8 @@
 
             <!-- CONTAINER PARA BOTÕES ADMIN OCULTOS -->
             <div id="admin-actions" style="display: none; position: absolute; left: 50%; transform: translateX(-50%); gap: 10px; z-index: 1000; align-items: center;">
-                <!-- BOTÃO AR (GESTOS) MOVIDO PARA O ADMIN -->
-                <button id="btn-ar-toggle" class="btn-extras admin-btn-target" style="background: var(--k-dark); color: #00ff66; border: 2px solid #00ff66; padding: 10px 20px; border-radius: 20px; font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 255, 102, 0.2); opacity: 1;" title="Abrir Painel AR">
+                <!-- BOTÃO AR (GESTOS) CORRIGIDO COM ONCLICK DIRETO -->
+                <button id="btn-ar-toggle" onclick="window.ARController.toggle()" class="btn-extras admin-btn-target" style="background: var(--k-dark); color: #00ff66; border: 2px solid #00ff66; padding: 10px 20px; border-radius: 20px; font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 255, 102, 0.2); opacity: 1;" title="Abrir Painel AR">
                     <i class="fa-solid fa-hand-sparkles"></i> Painel AR
                 </button>
                 <button id="btn-config-cloudinary" class="admin-btn-target" style="background: var(--k-orange); color: white; border: none; padding: 10px 20px; border-radius: 20px; font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(243, 146, 0, 0.4);">
@@ -466,6 +464,7 @@
                 document.getElementById('slide-title').style.color = isDark ? 'white' : 'var(--k-dark)';
             }
 
+            // HTML INJECTIONS - USANDO CLASSES FLEXBOX RESPONSIVAS
             if (data.type === 'cover') {
                 html = `<div class="layout-col" style="align-items: center; text-align: center;">
                     <h1 class="txt-mega editable text-white" data-id="${data.id}_t" style="text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${data.t}</h1>
@@ -505,7 +504,7 @@
             window.setupGestor();
         }
 
-        // NAVEGAÇÃO, EVENTOS E SYNC
+        // NAVEGAÇÃO E EVENTOS
         window.nextSlide = function() { if (window.currentIndex < slidesData.length - 1) { window.currentIndex++; window.syncSlideState(); window.renderSlide(); } };
         window.prevSlide = function() { if (window.currentIndex > 0) { window.currentIndex--; window.syncSlideState(); window.renderSlide(); } };
 
@@ -620,27 +619,49 @@
                 if (this.isActive) { 
                     this.stop(); 
                 } else { 
+                    // Mostra aviso de carregamento para feedback imediato
+                    document.getElementById('ar-status-warning').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Iniciando Motor Holográfico...';
+                    document.getElementById('ar-status-warning').style.display = 'block';
                     await this.start(); 
                 }
             },
 
             async start() {
-                this.video = document.getElementById('ar-video');
-                this.canvas = document.getElementById('ar-canvas');
-                this.ctx = this.canvas.getContext('2d');
-
                 try {
+                    // 1. Validar se as bibliotecas da Google (TensorFlow) carregaram corretamente
+                    if (typeof tf === 'undefined' || typeof poseDetection === 'undefined') {
+                        alert("As bibliotecas de Inteligência Artificial ainda estão a carregar. Verifique a sua internet e tente novamente.");
+                        document.getElementById('ar-status-warning').style.display = 'none';
+                        return;
+                    }
+
+                    // 2. Validar permissões e contexto HTTPS (Obrigatório para aceder à câmara)
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        alert("O seu navegador bloqueou o acesso à câmera. É obrigatório aceder a este link através de 'https://' para usar a Realidade Aumentada.");
+                        document.getElementById('ar-status-warning').style.display = 'none';
+                        return;
+                    }
+
+                    this.video = document.getElementById('ar-video');
+                    this.canvas = document.getElementById('ar-canvas');
+                    this.ctx = this.canvas.getContext('2d');
+
+                    // Pede permissão para a câmara frontal
                     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
                     this.video.srcObject = stream;
-                    await new Promise(resolve => this.video.onloadedmetadata = resolve);
+                    
+                    // Aguarda que o vídeo carregue para saber as dimensões
+                    await new Promise((resolve) => {
+                        this.video.onloadedmetadata = () => resolve();
+                    });
                     this.video.play();
 
                     const w = this.canvas.width = window.innerWidth;
                     const h = this.canvas.height = window.innerHeight;
 
-                    document.getElementById('ar-status-warning').style.display = 'block';
-
+                    // Instancia a IA MoveNet
                     if (!this.detector) {
+                        document.getElementById('ar-status-warning').innerHTML = '<i class="fa-solid fa-brain"></i> A calibrar IA Holográfica...';
                         const model = poseDetection.SupportedModels.MoveNet;
                         this.detector = await poseDetection.createDetector(model, { enableSmoothing: true });
                     }
@@ -655,7 +676,9 @@
                     
                     this.loop();
                 } catch(e) {
-                    alert("Erro ao acessar a câmera (Verifique as permissões): " + e.message);
+                    console.error("Erro no AR:", e);
+                    alert("Falha ao ativar a Magia AR: " + e.message + "\n\n(Dica: Confirme que deu permissão à câmera e que não há outras abas a usá-la.)");
+                    document.getElementById('ar-status-warning').style.display = 'none';
                 }
             },
 
