@@ -599,6 +599,11 @@
             document.getElementById('progress-bar').style.width = (((window.currentIndex + 1) / slidesData.length) * 100) + '%';
             
             window.setupGestor();
+
+            document.querySelectorAll('video').forEach(v => {
+                v.pause();
+                v.currentTime = 0;
+            });
         }
 
         window.triggerRemoteAction = function() {
@@ -786,6 +791,7 @@
             cursor: { x: window.innerWidth / 2, y: window.innerHeight / 2, active: false },
             target: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
             hoverTime: 0, hoveredElement: null,
+            stableTime: 0, lastHandSeen: 0,
 
             async toggle() {
                 if (this.isActive) { 
@@ -848,7 +854,7 @@
                     
                     document.getElementById('ar-dashboard').style.display = 'flex';
                     window.cancelARConfirm();
-                    window.renderSlide(true); 
+                    window.renderSlide(false); 
                     
                     this.loop();
                 } catch(e) {
@@ -888,11 +894,11 @@
                 this.cursor.active = false;
 
                 // 3) RASTREAMENTO E AVALIAÇÃO DA MÃO (FILTRO E ZONA MORTA)
-                if (hands.length > 0 && !window.arCooldown) {
+                if (hands.length > 0 && !window.arCooldown && (now - this.lastHandSeen) > 200){
                     const hand = hands.reduce((prev, current) => (prev.score > current.score) ? prev : current);
                     
                     // Validações rigorosas de segurança (Mão Fantasma)
-                    if (!hand || hand.score < 0.8) {
+                    if (!hand || hand.score < 0.8) {	
                         this.cursor.active = false;
                     } else if (!hand.keypoints || hand.keypoints.length < 10) {
                         this.cursor.active = false;
@@ -943,10 +949,14 @@
                     }
                 }
 
-                // 3C) SUAVIZAÇÃO DE MOVIMENTO DO CURSOR (LERP)
+                // 3C) SUAVIZAÇÃO DE MOVIMENTO DO CURSOR (LERP) E ESTABILIDADE
                 if (this.cursor.active) {
                     this.cursor.x += (this.target.x - this.cursor.x) * 0.25;
                     this.cursor.y += (this.target.y - this.cursor.y) * 0.25;
+                    this.stableTime += dt;
+                    this.lastHandSeen = now;
+                } else {
+                    this.stableTime = 0;
                 }
 
                 let foundClickable = null;
@@ -988,7 +998,7 @@
                         this.ctx.arc(this.cursor.x, this.cursor.y, 45, -Math.PI/2, -Math.PI/2 + (this.hoverTime / requiredHover) * (Math.PI*2));
                         this.ctx.stroke();
 
-                        if (this.hoverTime >= requiredHover) {
+                        if (this.hoverTime >= requiredHover && this.stableTime > 0.8) {
                             // Clica apenas se validou todas as etapas via Debounce Global
                             if (canClick()) {
                                 this.hoveredElement.click();
@@ -1036,7 +1046,7 @@
             }
         };
 
-        window.onload = function() { window.renderSlide(true); };
+        window.onload = function() { window.renderSlide(false); document.querySelectorAll('video').forEach(v => { v.pause(); v.currentTime = 0; }); };
     </script>
 </body>
 </html>
