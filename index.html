@@ -894,7 +894,7 @@
                 this.cursor.active = false;
 
                 // 3) RASTREAMENTO E AVALIAÇÃO DA MÃO (FILTRO E ZONA MORTA)
-                if (hands.length > 0 && !window.arCooldown && (now - this.lastHandSeen) > 200){
+                if (hands.length > 0 && !window.arCooldown){
                     const hand = hands.reduce((prev, current) => (prev.score > current.score) ? prev : current);
                     
                     // Validações rigorosas de segurança (Mão Fantasma)
