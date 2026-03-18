@@ -15,7 +15,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
 
-    <!-- TENSORFLOW & MEDIAPIPE HANDS (Substituindo MoveNet) -->
+    <!-- TENSORFLOW & MEDIAPIPE HANDS -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection"></script>
@@ -100,7 +100,7 @@
         }
 
         /* =========================================================================
-           4. LAYOUTS INTERNOS (Garantindo que fiquem dentro da tela)
+           4. LAYOUTS INTERNOS
            ========================================================================= */
         .slide { display: none; width: 100%; height: 100%; flex-direction: column; justify-content: center; }
         .slide.active { display: flex; animation: fadeIn 0.4s ease-out; }
@@ -111,7 +111,7 @@
         
         .grid-locked { display: grid; gap: 2vmin; height: 100%; width: 100%; }
         .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } /* Sem espaçamento vazando a tela */
+        .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
         .card-box {
             background: var(--bg-card); padding: 2.5vmin; border-radius: 2vmin;
@@ -182,7 +182,7 @@
         .admin-mode .editable-media::after { content: '📸 ALTERAR MÍDIA'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,174,239,0.95); color: white; padding: 2vmin 4vmin; border-radius: 1vmin; font-size: 3vmin; font-weight: bold; pointer-events: none; z-index: 100;}
         .has-link:not(.editable) { cursor: pointer; border-bottom: 0.4vmin solid var(--k-blue); }
 
-        /* ESCUDO DE CLIQUE ADMIN (Bloqueia o vídeo de roubar o toque na tela TDAH) */
+        /* ESCUDO DE CLIQUE ADMIN */
         .admin-click-shield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 99; background: transparent; cursor: pointer; display: none; }
         .admin-mode .admin-click-shield { display: block; }
 
@@ -219,7 +219,7 @@
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; display: none; } }
 
         /* =========================================================================
-           7. PAINEL DE CONTROLE AR (MINORITY REPORT DASHBOARD)
+           7. PAINEL DE CONTROLE AR
            ========================================================================= */
         #ar-dashboard {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -382,6 +382,15 @@
         window.lastRenderedIndex = -1;
         window.lastSettingsHash = "";
 
+        // DEBOUNCE GLOBAL: Impede múltiplos cliques
+        let lastClickTime = 0;
+        function canClick() {
+            const now = Date.now();
+            if (now - lastClickTime < 1500) return false;
+            lastClickTime = now;
+            return true;
+        }
+
         let db = null;
         try {
             firebase.initializeApp(window.firebaseCfg);
@@ -469,6 +478,9 @@
             { id: 'fim', type: 'end', title: "MUITO OBRIGADO!", subtitle: "Unidade Kumon Rio Preto Shopping", contact: "Tel: 3227-0644" }
         ];
 
+        // =========================================================================
+        // 1) LÓGICA DE MÍDIA - SUPORTE AUTOMÁTICO VÍDEO E IMAGEM (CORREÇÃO)
+        // =========================================================================
         window.getMediaTag = function(mediaId, defaultType, defaultMediaUrl) {
             let src = window.savedMedia[mediaId] || defaultMediaUrl;
             if (!src) return '<div style="color: var(--txt-muted); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;"><i class="fa-solid fa-video icon-xl" style="margin-bottom: 2vmin;"></i></div>';
@@ -478,9 +490,11 @@
                 if(vid && vid.includes('&')) vid = vid.split('&')[0];
                 return '<iframe src="https://www.youtube.com/embed/' + vid + '?autoplay=0&enablejsapi=1" allowfullscreen style="pointer-events: none; width: 100%; height: 100%; object-fit: contain; border-radius: 2vmin; background: transparent;"></iframe>';
             }
+            // Auto detecção de vídeos (mp4, webm, ogg) com propriedades seguras anti-quebra de layout
             if (src.match(/\.(mp4|webm|ogg)$/i)) {
-                return '<video src="' + src + '" controls class="slide-video" style="width: 100%; height: 100%; object-fit: contain; border-radius: 2vmin; background: transparent;"></video>'; 
+                return '<video src="' + src + '" muted playsinline class="slide-video" style="width: 100%; height: 100%; object-fit: contain; border-radius: 2vmin; background: transparent;"></video>'; 
             }
+            // Fallback seguro para imagem
             return '<img src="' + src + '" alt="Midia" style="width: 100%; height: 100%; object-fit: cover; border-radius: 2vmin;" onerror="this.onerror=null; this.src=\'https://placehold.co/800x600/e2e8f0/64748b?text=Erro\';" />';
         }
 
@@ -587,14 +601,12 @@
             window.setupGestor();
         }
 
-        // AÇÃO REMOTA VIA FIREBASE
         window.triggerRemoteAction = function() {
             if (window.arCooldown) return;
             if (db) { db.ref("kumon_config/action").set({ type: 'MEDIA_ACTION', ts: Date.now() }); } 
             else { window.executeMediaAction(); }
         };
 
-        // EXECUÇÃO LOCAL BLINDADA
         window.executeMediaAction = function() {
             if (window.isAdmin) return; 
 
@@ -734,7 +746,7 @@
         });
 
         // =========================================================================
-        // MÓDULO AR V177 (Atualizado para MediaPipe Hands Puro & Preciso)
+        // MÓDULO AR V177 - ESTABILIZADO (ANTI-ACIDENTE + LERP + HOVER REAL)
         // =========================================================================
         
         window.triggerARConfirm = function(actionType) {
@@ -757,8 +769,9 @@
             if (window.arPendingAction) window.arPendingAction();
             window.cancelARConfirm(); 
             
+            // 2A) COOLDOWN APÓS CLIQUE PELO SISTEMA ANTIGO TBM (1500ms MÍNIMO)
             window.arCooldown = true;
-            setTimeout(() => { window.arCooldown = false; }, 2000);
+            setTimeout(() => { window.arCooldown = false; }, 1500);
         };
 
         window.cancelARConfirm = function() {
@@ -770,7 +783,9 @@
 
         window.ARController = {
             isActive: false, video: null, canvas: null, ctx: null, detector: null, lastTime: 0,
-            cursor: { x: 0, y: 0, active: false }, hoverTime: 0, hoveredElement: null,
+            cursor: { x: window.innerWidth / 2, y: window.innerHeight / 2, active: false },
+            target: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+            hoverTime: 0, hoveredElement: null,
 
             async toggle() {
                 if (this.isActive) { 
@@ -811,6 +826,10 @@
 
                     const w = this.canvas.width = window.innerWidth;
                     const h = this.canvas.height = window.innerHeight;
+                    this.target.x = w / 2;
+                    this.target.y = h / 2;
+                    this.cursor.x = w / 2;
+                    this.cursor.y = h / 2;
 
                     if (!this.detector) {
                         document.getElementById('ar-status-warning').innerHTML = '<i class="fa-solid fa-brain"></i> A calibrar IA Holográfica (MediaPipe Hands)...';
@@ -851,7 +870,7 @@
 
                 const now = performance.now();
                 let dt = (now - this.lastTime) / 1000;
-                if(dt > 0.1) dt = 0.016;
+                if(dt > 0.1) dt = 0.016; // Segurança contra engasgos no navegador
                 this.lastTime = now;
 
                 const w = this.canvas.width = window.innerWidth;
@@ -859,25 +878,48 @@
                 this.ctx.clearRect(0, 0, w, h);
 
                 let hands = [];
-                try { hands = await this.detector.estimateHands(this.video, { flipHorizontal: false }); } catch(e) {}
+                try {
+                    // Segurança contra readyState inválido no iOS
+                    if (this.video.readyState >= 2) {
+                        hands = await this.detector.estimateHands(this.video, { flipHorizontal: false });
+                    }
+                } catch(e) {}
 
                 this.cursor.active = false;
 
+                // 3) RASTREAMENTO E AVALIAÇÃO DA MÃO (FILTRO E ZONA MORTA)
                 if (hands.length > 0 && !window.arCooldown) {
                     const hand = hands.reduce((prev, current) => (prev.score > current.score) ? prev : current);
                     
-                    if (hand.score > 0.6) {
+                    // Validações rigorosas de segurança (Mão Fantasma)
+                    if (!hand || hand.score < 0.8) {
+                        this.cursor.active = false;
+                    } else if (!hand.keypoints || hand.keypoints.length < 10) {
+                        this.cursor.active = false;
+                    } else if (hand.keypoints.some(p => p.score < 0.7)) {
+                        this.cursor.active = false;
+                    } else {
+                        // 3A) FILTRO DE CONFIANÇA GERAL (> 0.75) e garantias estruturais da mão válidas
                         const indexTip = hand.keypoints.find(k => k.name === 'index_finger_tip');
                         
-                        if (indexTip && indexTip.score > 0.6) {
+                        // 3B) IGNORAR MÃO PARCIAL (Apenas se o indicador for visível)
+                        if (indexTip && indexTip.score > 0.75) {
                             const vW = this.video.videoWidth; 
                             const vH = this.video.videoHeight;
                             
                             const mapKpx = (valX) => w - (valX / vW) * w;
                             const mapKpy = (valY) => (valY / vH) * h;
 
-                            this.cursor.x = mapKpx(indexTip.x);
-                            this.cursor.y = mapKpy(indexTip.y);
+                            const rawX = mapKpx(indexTip.x);
+                            const rawY = mapKpy(indexTip.y);
+
+                            // 5) ZONA MORTA: Evitar pequenas oscilações/jitter (< 5px ignorado)
+                            const dist = Math.hypot(rawX - this.target.x, rawY - this.target.y);
+                            if (dist > 5 || !this.cursor.active) {
+                                this.target.x = rawX;
+                                this.target.y = rawY;
+                            }
+
                             this.cursor.active = true;
 
                             this.ctx.lineWidth = 4;
@@ -901,24 +943,33 @@
                     }
                 }
 
+                // 3C) SUAVIZAÇÃO DE MOVIMENTO DO CURSOR (LERP)
+                if (this.cursor.active) {
+                    this.cursor.x += (this.target.x - this.cursor.x) * 0.25;
+                    this.cursor.y += (this.target.y - this.cursor.y) * 0.25;
+                }
+
                 let foundClickable = null;
                 
+                // 4) LÓGICA DE INTERAÇÃO E HOVER PERSISTENTE
                 if (this.cursor.active && !window.arCooldown) {
                     const elementsUnderCursor = document.elementsFromPoint(this.cursor.x, this.cursor.y);
                     for (let el of elementsUnderCursor) {
-                        if (el.classList.contains('admin-btn-target')) {
+                        if (el && el.classList && el.classList.contains('admin-btn-target')) {
                             foundClickable = el;
                             break;
                         }
                     }
 
                     if (foundClickable) {
+                        // Verifica se é o mesmo elemento de antes, caso não, zera.
                         if (this.hoveredElement !== foundClickable) {
                             this.hoveredElement = foundClickable;
                             this.hoverTime = 0;
                         }
                         this.hoverTime += dt;
                     } else {
+                        // Decrementa o hover sutilmente se sair por uma micro-fração de segundo, reseta logo em seguida.
                         if (this.hoverTime > 0) {
                             this.hoverTime -= dt * 3;
                             if (this.hoverTime <= 0) {
@@ -928,15 +979,25 @@
                         }
                     }
 
+                    // 2B) TEMPO DE HOVER EXATO DE 1.8s
                     if (this.hoveredElement && this.hoverTime > 0) {
                         this.ctx.strokeStyle = foundClickable ? "#00ff66" : "rgba(255, 100, 100, 0.8)";
                         this.ctx.lineWidth = 10;
                         this.ctx.beginPath();
-                        this.ctx.arc(this.cursor.x, this.cursor.y, 45, -Math.PI/2, -Math.PI/2 + (this.hoverTime/1.5) * (Math.PI*2));
+                        const requiredHover = 1.8;
+                        this.ctx.arc(this.cursor.x, this.cursor.y, 45, -Math.PI/2, -Math.PI/2 + (this.hoverTime / requiredHover) * (Math.PI*2));
                         this.ctx.stroke();
 
-                        if (this.hoverTime >= 1.5) {
-                            this.hoveredElement.click();
+                        if (this.hoverTime >= requiredHover) {
+                            // Clica apenas se validou todas as etapas via Debounce Global
+                            if (canClick()) {
+                                this.hoveredElement.click();
+                            }
+                            
+                            // 2A) COOLDOWN GLOBAL ABSOLUTO / 2C) BLOQUEIO DE MULTI-TRIGGER
+                            window.arCooldown = true;
+                            setTimeout(() => { window.arCooldown = false; }, 1500);
+
                             this.hoverTime = 0;
                             this.hoveredElement = null; 
                             
@@ -945,12 +1006,14 @@
                             this.ctx.arc(this.cursor.x, this.cursor.y, 80, 0, Math.PI*2);
                             this.ctx.fill();
                         } else {
+                            // Enchendo o cursor de hover
                             this.ctx.fillStyle = "rgba(0, 255, 102, 0.9)";
                             this.ctx.beginPath();
                             this.ctx.arc(this.cursor.x, this.cursor.y, 18, 0, Math.PI*2);
                             this.ctx.fill();
                         }
                     } else {
+                        // Livre (Não interagindo com nada)
                         this.ctx.fillStyle = "rgba(0, 255, 255, 0.9)";
                         this.ctx.beginPath();
                         this.ctx.arc(this.cursor.x, this.cursor.y, 18, 0, Math.PI*2);
@@ -959,6 +1022,14 @@
                 } else {
                     this.hoveredElement = null;
                     this.hoverTime = 0;
+
+                    // Indica visualmente que o usuário está em Cooldown / Travado Temporariamente
+                    if (window.arCooldown && this.cursor.active) {
+                        this.ctx.fillStyle = "rgba(255, 68, 68, 0.8)";
+                        this.ctx.beginPath();
+                        this.ctx.arc(this.cursor.x, this.cursor.y, 18, 0, Math.PI*2);
+                        this.ctx.fill();
+                    }
                 }
 
                 requestAnimationFrame(() => this.loop());
